@@ -22,7 +22,7 @@ CREATE TABLE tournaments (
 CREATE TABLE tournament_info(
   Id SERIAL PRIMARY KEY NOT NULL,
   tournament_id INT REFERENCES tournaments(id),
-  playerId INT REFERENCES players(id)
+  player_id INT REFERENCES players(id)
 );
 CREATE TABLE matches (
   id SERIAL PRIMARY KEY, 
