@@ -7,9 +7,10 @@
 -- these lines here.
 
 DROP DATABASE IF EXISTS tournament;
-\c tournament
 
 CREATE DATABASE tournament;
+
+\c tournament
 
 CREATE TABLE players (
   id SERIAL PRIMARY KEY, 
@@ -32,6 +33,8 @@ CREATE TABLE matches (
   isDraw BOOLEAN DEFAULT FALSE
 );
 
-INSERT INTO tournaments (title) VALUES (1,'Unassigned 500');
-INSERT INTO tournaments (title) VALUES (2,'Caster Under 25');
-INSERT INTO tournaments (title) VALUES (3,'IIPS');
+INSERT INTO tournaments (title) VALUES ('Unassigned 500');
+INSERT INTO tournaments (title) VALUES ('Caster Under 25');
+INSERT INTO tournaments (title) VALUES ('IIPS');
+
+\q
