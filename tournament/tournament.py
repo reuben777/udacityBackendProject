@@ -210,11 +210,9 @@ def swissPairings(tournamentId=1):
     for player in players:
         if NumOfMatches > 0:
             for opponent in players:
-                if not isInPlayerTuple(player[0], playerTuple)
-                and not isInPlayerTuple(opponent[0], playerTuple):
+                if not isInPlayerTuple(player[0], playerTuple) and not isInPlayerTuple(opponent[0], playerTuple):
                     # Opponent and player havent been assigned yet
-                    if player[0] != opponent[0] 
-                    and isPairable(tournamentId, player[0], opponent[0]):
+                    if player[0] != opponent[0] and isPairable(tournamentId, player[0], opponent[0]):
                         # Can they pair? have they played together yet?
                         combined = (player[0], player[1], opponent[0], opponent[1])
                         playerTuple.append(combined)
