@@ -14,17 +14,17 @@ def connect():
 
 def deleteMatches():
     """Remove all the match records from the database."""
-    submitSQL("DELETE FROM MATCHRECORDS")
+    submitSQL("DELETE FROM match")
     submitSQL("DELETE FROM TOURNAMENTINFO")
 
 def deletePlayers():
     """Remove all the player records from the database."""
-    matchCount = submitSQL("SELECT COUNT(Id) FROM MATCHRESULTS")
+    # matchCount = submitSQL("SELECT COUNT(Id) FROM MATCHRESULTS")
     deleteCount = 0
-    if matchCount > 0 :
+    # if matchCount > 0 :
         conn = connect()
         cursi = conn.cursor()
-        cursi.execute('''DELETE FROM PLAYERINFO''')
+        cursi.execute('''DELETE FROM players''')
         deleteCount = cursi.rowcount
         conn.commit()
         conn.close()
@@ -32,10 +32,12 @@ def deletePlayers():
 
 def countPlayers():
     """Returns the number of players currently registered."""
-    returnInfo = submitSQL("SELECT COUNT(*) FROM PLAYERINFO")
+    returnInfo = submitSQL("SELECT COUNT(*) FROM players")
     playerCount = 0
     if len(returnInfo) > 0:
-        playerCount = int(returnInfo[0][0])
+        print returnInfo
+        # TODO here
+        playerCount = int(returnInfo[0][0]) 
     return playerCount
 
 def registerPlayer(name):
@@ -48,20 +50,7 @@ def registerPlayer(name):
       name: the player's full name (need not be unique).
     """
     if name:
-        bull = name.split(" ")
-        try:
-            bull[1]
-        except IndexError:
-            bull.append("")
-
-        # lastName = bull[1]
-        lastName = ""
-        PlayerId = getMaxId("PLAYERINFO")
-        conn = connect()
-        cursi = conn.cursor()
-        cursi.execute('''INSERT INTO PLAYERINFO (Id,playerName,playerSurname) VALUES (%s,%s,%s)''',(PlayerId,name,lastName))
-        conn.commit()
-        conn.close()
+        submitSQL('''INSERT INTO players (name) VALUES (%s)''',(name,))
     else:
         print("Please specify a name")
         requestPlayerName()
@@ -80,27 +69,23 @@ def playerStandings(tournamentId=1):
         matches: the number of matches the player has played
     """
     playerCount = 0
-    players = submitSQL('''SELECT Id, playerName FROM PLAYERINFO''')
+    players = submitSQL('''SELECT id, name FROM player_info''')
     playersList = []
     for player in players:
         playerId = str(player[0])
-        playerName = submitSQL('''SELECT playerName::text || '' || playerSurname::text as name FROM PLAYERINFO WHERE Id = %s''',playerId)
-        playerName = playerName[0][0]
+        playerName = player[1]
         numOfMatches = 0
-        wins = 0
-        loses = 0
-        draws = 0
-        standings = submitSQL('''SELECT * FROM STANDINGS WHERE Id = %s''',playerId)
-        if len(standings) > 0 and not standings[0][1] is None:
-            wins = int(standings[0][3])
-            loses = int(standings[0][4])
-            draws = int(standings[0][5])
-            numOfMatches = wins + loses + draws
-
+        winnings = submitSQL('''SELECT COUNT(id) FROM matches WHERE winner = %s''',(playerId,playerId))
+        loses = submitSQL('''SELECT COUNT(id) FROM matches WHERE loser = %s''',(playerId,playerId))
+        numOfMatches = winnings + loses
         tup = playerId,playerName,wins,numOfMatches
         playersList.append(tup)
     return playersList
 
+def getMatchNumber(playerOneId,playerTwoId,tournamentid=1):
+    matches = submitSQL('''SELECT * FROM matches WHERE winner = %s or winner = %s AND tournament_id = %s''',(playerOneId,playerTwoId,tournamentid))
+    numOfMatches = len(matches) + 1
+    return numOfMatches
 
 def reportMatch(winner, loser,tournamentId=1,draw=False):
     """Records the outcome of a single match between two players.
@@ -109,17 +94,8 @@ def reportMatch(winner, loser,tournamentId=1,draw=False):
       winner:  the id number of the player who won
       loser:  the id number of the player who lost
     """
-    if not draw:
-        winnerResultId = 1
-        loserResultId = 2
-        winnerPoints = 3
-        loserPoints = 0
-    else:
-        winnerResultId = 3
-        loserResultId = 3
-        winnerPoints = 1
-        loserPoints = 1
-    roundNumber = getMatchNumber(winner,loser)
+
+    roundNumber = getMatchNumber(winner,loser,tournamentid)
     winnerSQL = createMatchRecord(winner,loser,tournamentId,winnerResultId,roundNumber,winnerPoints)
     loserSQL = createMatchRecord(loser,winner,tournamentId,loserResultId,roundNumber,loserPoints)
 
@@ -132,27 +108,21 @@ def isPairable(tournamentId,player1Id,player2Id):
     playable = True;
     drawOccured = False;
     lossOccured = False;
-    winOccured = False;
-    matchResultCount = 0;
     matchCount = 0;
-    sql = "SELECT * FROM MATCHRECORDS WHERE player_id = %s and opponent_id = %s and tournamentid = %s";
+    sql = "SELECT * FROM matches WHERE winner = %s and winner = %s and tournamentid = %s";
     matchInfo = submitSQL(sql,(player1Id,player2Id,tournamentId))
-
     if len(matchInfo) > 0 :
         for match in matchInfo:
             matchCount += 1;
-            matchResultCount += match[6]
-            if match[3] == 3:
+            if match[1] == player1Id:
                 drawOccured = True
-            elif match[3] == 2:
+            elif match[2] == player1Id:
                 lossOccured = True;
-            else:
-                winOccured = True;
 
     if matchCount == 2:
         if not lossOccured and not drawOccured:
             playable = False
-        if not winOccured and not drawOccured:
+        if lossOccured and not drawOccured:
             playable = False
     if matchCount == 3:
         playable = False
@@ -160,7 +130,7 @@ def isPairable(tournamentId,player1Id,player2Id):
     return playable
 
 def getPlayersFromTournament(tournamentId):
-    players = submitSQL("SELECT pi.Id,pi.playerName,ti.tournamentId FROM PLAYERINFO as pi LEFT OUTER JOIN TOURNAMENTINFO as ti ON (%s= ti.tournamentId)",str(tournamentId))
+    players = submitSQL("SELECT pl.id,pl.name,ti.tournament_id FROM players as pl LEFT OUTER JOIN tournament_info as ti ON (%s= ti.tournament_id)",str(tournamentId))
     return players 
 
 def swissPairings(tournamentId=1):
@@ -238,59 +208,33 @@ def submitSQL(SQL,data=""):
     conn.commit()
     conn.close()
     return SQLResponse
-# Gets the max Id number from a specified table. Used mainly with insert statements.
-def getMaxId(Table,MaxId="Id"):
-    conn = connect()
-    cursi = conn.cursor()
-    # gets the MaxId from Table
-    cursi.execute("SELECT MAX(%s) FROM %s",(AsIs(MaxId),AsIs(Table)))
-    tup = cursi.fetchall()
-    conn.commit()
-    conn.close()
-    MaxNum = 0
-    if len(tup) > 0 and not (tup[0][0] is None):
-        MaxNum = int(tup[0][0]) + 1
-    else:
-        MaxNum += 1
-    # Tuple to integer
 
-    return MaxNum
-
-def getTournaments():
-    tournamentsInfo = submitSQL('''SELECT * FROM TOURNAMENTS''')
-    if tournamentsInfo:
-        data = tournamentsInfo
-    else:
-        data = ""
-    return data
 
 def assignPlayerToTournament():
-    players = submitSQL('''SELECT * FROM  PLAYERINFO''')
+    players = submitSQL('''SELECT * FROM  players''')
     if len(players) > 0:
         print("Players:")
         for player in players:
             print("Player Id - ",player[0])
             print("Player Name - ",player[1])
-            print("Player Surname - ",player[2])
     playerId = input("Please Enter the Player Id you wish to enroll in a tournament :")
     try:
         playerId = int(playerId)
     except ValueError:
         print("An error occured when get player info")
-    tournaments = getTournaments()
+    tournaments = submitSQL('''SELECT * FROM tournaments''')
+    print("Tournaments:")
     if len(tournaments) > 0:
-        print("Tournaments:")
         for tournament in tournaments:
             print("Tournament Id - ",tournament[0])
-            print("Tournament Name - ",tournament[1])
+            print("Tournament Title - ",tournament[1])
     else:
-        print("Tournaments:")
         print("--Empty--")
 
     tournamentId = input("Please Enter the Tournament Id you wish to assign player to :")
     try:
         tournamentId = int(tournamentId)
-        tournamentInfo = submitSQL('''INSERT INTO TOURNAMENTINFO (Id,tournamentId,playerId) VALUES (%s,%s,%s) returning Id''',(getMaxId("TOURNAMENTINFO"),tournamentId,playerId))
+        tournamentInfo = submitSQL('''INSERT INTO tournament_info (tournament_id,player_id) VALUES (%s,%s) returning Id''',(tournamentId,playerId))
         if tournamentInfo[0][0]:
             print("Player Assigned to Tournament")
         else:
@@ -298,9 +242,9 @@ def assignPlayerToTournament():
     except ValueError:
         print("An error occured when attempting to assign player")
 
-def createMatchRecord(playerId,opponentId,tournamentId,matchResultId,roundNumber,points):
+def createMatchRecord(playerId,opponentId,tournamentId,isDraw,roundNumber):
     if roundNumber <= 4:
-        matchId = submitSQL('''INSERT INTO MATCHRECORDS (Id,player_Id,opponent_Id,matchResult_Id,tournamentId,roundNumber,points) VALUES (%s,%s,%s,%s,%s,%s,%s) returning Id''',(getMaxId("MATCHRECORDS"),playerId,opponentId,matchResultId,tournamentId,roundNumber,points))
+        matchId = submitSQL('''INSERT INTO matches (winner,loser,tournamentId,isDraw) VALUES (%s,%s,%s,%s) returning Id''',(playerId,opponentId,tournamentId,isDraw))
         if matchId[0][0]:
             return True
         else:
@@ -309,7 +253,5 @@ def createMatchRecord(playerId,opponentId,tournamentId,matchResultId,roundNumber
         print("Players cannot play more than 3 matches")
         return False;
 
-def getMatchNumber(playerOneId,playerTwoId):
-    matches = submitSQL('''SELECT * FROM MATCHRECORDS WHERE player_Id = %s AND opponent_Id = %s''',(playerOneId,playerTwoId))
-    numOfMatches = len(matches) + 1
-    return numOfMatches
+
+registerPlayer('Test User')
